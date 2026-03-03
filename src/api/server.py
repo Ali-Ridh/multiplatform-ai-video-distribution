@@ -41,12 +41,23 @@ app.add_middleware(
 # Serve static files (Next.js build output)
 static_dir = os.getenv("STATIC_DIR", "./frontend")
 if os.path.exists(static_dir):
-    # Check if we have a build directory (production) or just the source (development)
-    build_dir = os.path.join(static_dir, "build")
-    if os.path.exists(build_dir):
-        app.mount("/", StaticFiles(directory=build_dir, html=True), name="static")
+    # Check if we have an export directory (production) or just the source (development)
+    out_dir = os.path.join(static_dir, "out")
+    if os.path.exists(out_dir):
+        from fastapi.responses import FileResponse
+        
+        # Serve Next.js static files
+        app.mount("/_next", StaticFiles(directory=os.path.join(out_dir, "_next")), name="next_static")
+        
+        # Serve index.html for root path
+        @app.get("/")
+        async def serve_index():
+            index_path = os.path.join(out_dir, "index.html")
+            if os.path.exists(index_path):
+                return FileResponse(index_path)
+            raise HTTPException(status_code=404, detail="Index not found")
     else:
-        logger.warning("Frontend build directory not found, skipping static file serving")
+        logger.warning("Frontend export directory not found, skipping static file serving")
 
 # Initialize Opus engine
 from src.opus import Opus
@@ -282,32 +293,6 @@ async def upload_processed_video(video_path: str, platform: str = Query("all")):
         logger.error(f"Upload video failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/analytics")
-async def get_analytics(platform: str = Query("all")):
-    """
-    Get analytics data
-    
-    Args:
-        platform: Platform to get analytics for
-        
-    Returns:
-        Analytics data
-    """
-    try:
-        logger.info(f"Getting analytics for: {platform}")
-        
-        results = opus.distributor.scrape_analytics(platform)
-        
-        return {
-            "success": True,
-            "platform": platform,
-            "data": results
-        }
-        
-    except Exception as e:
-        logger.error(f"Get analytics failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/api/schedule")
 async def schedule_upload(
     video_path: str,
@@ -352,6 +337,93 @@ async def schedule_upload(
         
     except Exception as e:
         logger.error(f"Schedule upload failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/accounts")
+async def get_accounts():
+    """
+    Get all connected accounts
+    
+    Returns:
+        List of connected accounts
+    """
+    try:
+        from src.database import get_db
+        from src.models import Account
+        
+        db = next(get_db())
+        accounts = db.query(Account).all()
+        
+        return {
+            "success": True,
+            "accounts": [
+                {
+                    "id": account.id,
+                    "platform": account.platform,
+                    "username": account.username,
+                    "status": "Active" if account.is_active else "Inactive",
+                    "posts": 0,  # TODO: Calculate from videos
+                    "views": 0,  # TODO: Calculate from analytics
+                    "engagement": 0.0  # TODO: Calculate from analytics
+                }
+                for account in accounts
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Get accounts failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics")
+async def get_analytics(platform: str = Query("all")):
+    """
+    Get analytics data
+    
+    Args:
+        platform: Platform to get analytics for
+        
+    Returns:
+        Analytics data
+    """
+    try:
+        logger.info(f"Getting analytics for: {platform}")
+        
+        # Get real analytics from database
+        from src.database import get_db
+        from src.models import Analytics, Video
+        from sqlalchemy import func
+        
+        db = next(get_db())
+        
+        # Calculate totals using SQL functions
+        total_views = db.query(func.sum(Analytics.views)).filter(
+            Analytics.platform == platform if platform != "all" and platform in ["tiktok", "youtube", "instagram"] else True
+        ).scalar() or 0
+        
+        total_likes = db.query(func.sum(Analytics.likes)).filter(
+            Analytics.platform == platform if platform != "all" and platform in ["tiktok", "youtube", "instagram"] else True
+        ).scalar() or 0
+        
+        total_comments = db.query(func.sum(Analytics.comments)).filter(
+            Analytics.platform == platform if platform != "all" and platform in ["tiktok", "youtube", "instagram"] else True
+        ).scalar() or 0
+        
+        # Get video count
+        video_count = db.query(Video).count()
+        
+        return {
+            "success": True,
+            "platform": platform,
+            "data": {
+                "total_views": total_views,
+                "total_likes": total_likes,
+                "total_comments": total_comments,
+                "video_count": video_count
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Get analytics failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/templates")

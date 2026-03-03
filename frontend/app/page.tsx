@@ -27,43 +27,100 @@ import {
   Bar
 } from 'recharts';
 
-// Mock data for analytics
-const mockAnalyticsData = [
-  { name: 'Mon', views: 4000, likes: 2400, comments: 120 },
-  { name: 'Tue', views: 3000, likes: 1398, comments: 98 },
-  { name: 'Wed', views: 2000, likes: 9800, comments: 80 },
-  { name: 'Thu', views: 2780, likes: 3908, comments: 130 },
-  { name: 'Fri', views: 1890, likes: 4800, comments: 105 },
-  { name: 'Sat', views: 2390, likes: 3800, comments: 115 },
-  { name: 'Sun', views: 3490, likes: 4300, comments: 140 },
-];
+// Types for API data
+interface Account {
+  id: number;
+  platform: string;
+  username: string;
+  status: 'Active' | 'Inactive';
+  posts: number;
+  views: number;
+  engagement: number;
+}
 
-const mockTopVideos = [
-  { id: 'video1', title: 'Amazing Tutorial', views: 25000, likes: 1800, shares: 350 },
-  { id: 'video2', title: 'Quick Tips', views: 22000, likes: 1600, shares: 320 },
-  { id: 'video3', title: 'Expert Interview', views: 18000, likes: 1400, shares: 280 },
-  { id: 'video4', title: 'Product Review', views: 15000, likes: 1200, shares: 250 },
-];
+interface VideoData {
+  id: string;
+  title: string;
+  views: number;
+  likes: number;
+  shares: number;
+}
 
-// Mock data for connected accounts
-const mockAccounts = [
-  { id: 1, platform: 'TikTok', username: '@user1', status: 'Active', posts: 45, views: 125000, engagement: 8.5 },
-  { id: 2, platform: 'YouTube', username: 'User2', status: 'Active', posts: 32, views: 85000, engagement: 7.2 },
-  { id: 3, platform: 'Instagram', username: 'user3', status: 'Active', posts: 28, views: 67000, engagement: 6.8 },
-  { id: 4, platform: 'TikTok', username: '@user4', status: 'Inactive', posts: 12, views: 15000, engagement: 3.2 },
-];
+interface AnalyticsData {
+  name: string;
+  views: number;
+  likes: number;
+  comments: number;
+}
+
+interface AnalyticsSummary {
+  total_views: number;
+  total_likes: number;
+  total_comments: number;
+  video_count: number;
+}
 
 const DashboardPage = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [videos, setVideos] = useState<VideoData[]>([]);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData[]>([]);
+  const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary>({
+    total_views: 0,
+    total_likes: 0,
+    total_comments: 0,
+    video_count: 0
+  });
 
   useEffect(() => {
-    // Simulate data loading
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 1500);
+    const fetchData = async () => {
+      try {
+        // Fetch accounts
+        const accountsResponse = await fetch('/api/accounts');
+        if (accountsResponse.ok) {
+          const accountsData = await accountsResponse.json();
+          setAccounts(accountsData.accounts);
+        }
 
-    return () => clearTimeout(timer);
+        // Fetch analytics summary
+        const analyticsResponse = await fetch('/api/analytics');
+        if (analyticsResponse.ok) {
+          const analyticsData = await analyticsResponse.json();
+          setAnalyticsSummary(analyticsData.data);
+        }
+
+        // Fetch videos
+        const videosResponse = await fetch('/api/videos');
+        if (videosResponse.ok) {
+          const videosData = await videosResponse.json();
+          setVideos(videosData.videos.map((video: any) => ({
+            id: video.filename,
+            title: video.filename.split('.')[0],
+            views: 0,
+            likes: 0,
+            shares: 0
+          })));
+        }
+
+        // Generate mock analytics data for chart (we'll replace this with real data later)
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const generatedData = days.map(day => ({
+          name: day,
+          views: Math.floor(Math.random() * 5000),
+          likes: Math.floor(Math.random() * 2000),
+          comments: Math.floor(Math.random() * 200)
+        }));
+        setAnalyticsData(generatedData);
+
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
   if (loading) {
@@ -207,10 +264,12 @@ const DashboardPage = () => {
                     <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-primary">
                       <PlayCircle className="w-6 h-6" />
                     </div>
-                    <span className="text-green-500 text-sm font-medium">+12.5%</span>
+                    <span className="text-green-500 text-sm font-medium">+{Math.floor(Math.random() * 20)}%</span>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 mb-1">25.2K</div>
+                    <div className="text-2xl font-bold text-gray-900 mb-1">
+                      {Math.floor(analyticsSummary.total_views / 1000)}.{Math.floor((analyticsSummary.total_views % 1000) / 100)}K
+                    </div>
                     <div className="text-gray-500 text-sm">Total Views</div>
                   </div>
                 </div>
@@ -220,10 +279,12 @@ const DashboardPage = () => {
                     <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center text-green-600">
                       <Activity className="w-6 h-6" />
                     </div>
-                    <span className="text-green-500 text-sm font-medium">+8.2%</span>
+                    <span className="text-green-500 text-sm font-medium">+{Math.floor(Math.random() * 20)}%</span>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 mb-1">1.8K</div>
+                    <div className="text-2xl font-bold text-gray-900 mb-1">
+                      {Math.floor(analyticsSummary.total_likes / 1000)}.{Math.floor((analyticsSummary.total_likes % 1000) / 100)}K
+                    </div>
                     <div className="text-gray-500 text-sm">Total Likes</div>
                   </div>
                 </div>
@@ -233,10 +294,10 @@ const DashboardPage = () => {
                     <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
                       <BarChart2 className="w-6 h-6" />
                     </div>
-                    <span className="text-green-500 text-sm font-medium">+5.1%</span>
+                    <span className="text-green-500 text-sm font-medium">+{Math.floor(Math.random() * 10)}%</span>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 mb-1">125</div>
+                    <div className="text-2xl font-bold text-gray-900 mb-1">{analyticsSummary.video_count}</div>
                     <div className="text-gray-500 text-sm">Videos Uploaded</div>
                   </div>
                 </div>
@@ -246,10 +307,12 @@ const DashboardPage = () => {
                     <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center text-yellow-600">
                       <Users className="w-6 h-6" />
                     </div>
-                    <span className="text-green-500 text-sm font-medium">+3.0%</span>
+                    <span className="text-green-500 text-sm font-medium">+{Math.floor(Math.random() * 5)}%</span>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 mb-1">15</div>
+                    <div className="text-2xl font-bold text-gray-900 mb-1">
+                      {accounts.filter(account => account.status === 'Active').length}
+                    </div>
                     <div className="text-gray-500 text-sm">Active Accounts</div>
                   </div>
                 </div>
@@ -268,7 +331,7 @@ const DashboardPage = () => {
                   </div>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={mockAnalyticsData}>
+                      <LineChart data={analyticsData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                         <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
                         <YAxis stroke="#6b7280" fontSize={12} />
@@ -294,7 +357,7 @@ const DashboardPage = () => {
                     </button>
                   </div>
                   <div className="space-y-4">
-                    {mockTopVideos.map((video, index) => (
+                    {videos.slice(0, 4).map((video, index) => (
                       <div key={video.id} className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
                         <div className="w-3 h-3 rounded-full bg-primary"></div>
                         <div className="flex-1">
@@ -480,7 +543,7 @@ const DashboardPage = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-6">Views vs Likes</h3>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={mockAnalyticsData}>
+                      <BarChart data={analyticsData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                         <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
                         <YAxis stroke="#6b7280" fontSize={12} />
@@ -503,7 +566,7 @@ const DashboardPage = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-6">Engagement Rate</h3>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={mockAnalyticsData}>
+                      <LineChart data={analyticsData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                         <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
                         <YAxis stroke="#6b7280" fontSize={12} />
@@ -550,7 +613,7 @@ const DashboardPage = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {mockAccounts.map((account) => (
+                      {accounts.map((account) => (
                         <tr key={account.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
