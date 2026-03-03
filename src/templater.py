@@ -8,7 +8,7 @@ Applies visual templates to videos using MoviePy
 import os
 import logging
 import json
-from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+from moviepy import VideoFileClip, TextClip, CompositeVideoClip
 from moviepy.video.tools.drawing import color_gradient
 
 # Configure logging

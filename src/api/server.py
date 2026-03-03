@@ -41,7 +41,12 @@ app.add_middleware(
 # Serve static files (Next.js build output)
 static_dir = os.getenv("STATIC_DIR", "./frontend")
 if os.path.exists(static_dir):
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+    # Check if we have a build directory (production) or just the source (development)
+    build_dir = os.path.join(static_dir, "build")
+    if os.path.exists(build_dir):
+        app.mount("/", StaticFiles(directory=build_dir, html=True), name="static")
+    else:
+        logger.warning("Frontend build directory not found, skipping static file serving")
 
 # Initialize Opus engine
 from src.opus import Opus

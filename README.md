@@ -42,6 +42,27 @@ A comprehensive video pipeline system for creating, processing, and distributing
 - FFmpeg
 - OpenAI API key
 
+### Database Configuration
+
+**SQLite (Default - Lightweight, File-based):**
+- Already configured in `.env` as `DATABASE_URL=sqlite:///./opus.db`
+- No additional setup required
+- Works well for development and small-scale operations
+
+**PostgreSQL (Production - Scalable):**
+For production or high-volume use (15+ accounts):
+1. Install PostgreSQL from [PostgreSQL.org](https://www.postgresql.org/download/)
+2. Create database and user:
+   ```sql
+   CREATE DATABASE opus;
+   CREATE USER opus_user WITH PASSWORD 'your_secure_password';
+   GRANT ALL PRIVILEGES ON DATABASE opus TO opus_user;
+   ```
+3. Update `.env` file:
+   ```
+   DATABASE_URL=postgresql://opus_user:your_secure_password@localhost:5432/opus
+   ```
+
 ### Installation
 
 1. **Clone the repository**
@@ -62,6 +83,17 @@ A comprehensive video pipeline system for creating, processing, and distributing
    cp .env.example .env
    ```
    Fill in your API keys and configuration.
+
+5. **Initialize database**:
+   ```bash
+   python create_tables.py
+   ```
+   This will create all the necessary tables in SQLite.
+
+6. **Test database connection**:
+   ```bash
+   python test_simple.py
+   ```
 
 ### Running the System
 
@@ -134,6 +166,8 @@ Opus/
 │   ├── worker/           # Celery tasks
 │   │   ├── celery_app.py # Celery configuration
 │   │   └── tasks.py      # Async task definitions
+│   ├── database.py       # Database session management
+│   ├── models.py         # SQLAlchemy ORM models
 │   ├── opus.py           # Core engine orchestrator
 │   ├── downloader.py     # Video downloader
 │   ├── transcriber.py    # Speech-to-text
@@ -148,10 +182,31 @@ Opus/
 │   ├── app/              # Pages and components
 │   ├── components/       # React components
 │   └── styles/           # CSS styles
+├── create_tables.py      # Database table creation script
+├── database_setup.py     # Database connection test script
+├── test_simple.py        # Simple database test
+├── test_database.py      # Comprehensive database test
 ├── .env.example          # Environment variables template
 ├── requirements.txt      # Python dependencies
-└── README.md             # Project documentation
+├── README.md             # Project documentation
+└── opus.db               # SQLite database file (created automatically)
 ```
+
+## Database Structure
+
+The system uses SQLAlchemy ORM with these main tables:
+
+| Table | Purpose |
+|-------|---------|
+| `users` | System user accounts and authentication |
+| `accounts` | Social media platform accounts with API credentials |
+| `videos` | Processed video metadata |
+| `video_renditions` | Rendered video variations for each platform |
+| `video_segments` | Viral segments detected in videos |
+| `analytics` | Video performance analytics |
+| `tasks` | Background task tracking |
+| `schedules` | Video upload schedule |
+| `proxies` | Proxy server configuration |
 
 ## Technologies Used
 

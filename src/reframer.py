@@ -28,14 +28,29 @@ class VideoReframer:
         self.processed_dir = os.path.join(self.output_dir, "processed")
         os.makedirs(self.processed_dir, exist_ok=True)
         
-        # Initialize MediaPipe Face Detection
-        self.mp_face_detection = mp.solutions.face_detection
-        self.face_detection = self.mp_face_detection.FaceDetection(
-            model_selection=1,  # 0 for short range, 1 for full range
-            min_detection_confidence=0.5
-        )
-        
-        logger.info("MediaPipe Face Detection initialized")
+        # Try to initialize MediaPipe Face Detection
+        try:
+            # Check if MediaPipe solutions module exists
+            if hasattr(mp, 'solutions') and hasattr(mp.solutions, 'face_detection'):
+                self.mp_face_detection = mp.solutions.face_detection
+                self.face_detection = self.mp_face_detection.FaceDetection(
+                    model_selection=1,  # 0 for short range, 1 for full range
+                    min_detection_confidence=0.5
+                )
+                logger.info("MediaPipe Face Detection initialized")
+            else:
+                # Fallback to OpenCV Haar cascades if MediaPipe solutions not available
+                logger.warning("MediaPipe solutions not available, using OpenCV Haar cascades instead")
+                self.face_detection = None
+                # Load Haar cascade for face detection
+                cascades_dir = os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_default.xml')
+                self.face_cascade = cv2.CascadeClassifier(cascades_dir)
+                logger.info("OpenCV Haar cascade face detector initialized")
+                
+        except Exception as e:
+            logger.warning(f"Failed to initialize face detector: {e}, will use center crop only")
+            self.face_detection = None
+            self.face_cascade = None
         
     def reframe(self, video_path: str, segments: list = None) -> str:
         """
@@ -130,27 +145,56 @@ class VideoReframer:
         Returns:
             Processed frame
         """
-        # Convert to RGB for MediaPipe
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # Try MediaPipe face detection if available
+        if self.face_detection:
+            try:
+                # Convert to RGB for MediaPipe
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                
+                # Detect faces
+                results = self.face_detection.process(rgb_frame)
+                
+                if results.detections:
+                    # Get face bounding box
+                    detection = results.detections[0]
+                    bbox = detection.location_data.relative_bounding_box
+                    
+                    # Calculate face center
+                    face_center_x = bbox.xmin + bbox.width / 2
+                    face_center_y = bbox.ymin + bbox.height / 2
+                    
+                    # Calculate crop coordinates to keep face centered
+                    cropped = self._center_crop(frame, face_center_x, face_center_y, target_width, target_height)
+                    return cropped
+            except Exception as e:
+                logger.warning(f"MediaPipe face detection failed: {e}")
         
-        # Detect faces
-        results = self.face_detection.process(rgb_frame)
+        # Try OpenCV Haar cascade face detection if available
+        elif self.face_cascade:
+            try:
+                # Convert to grayscale for face detection
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                
+                # Detect faces
+                faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                
+                if len(faces) > 0:
+                    # Get first face
+                    (x, y, w, h) = faces[0]
+                    
+                    # Calculate face center
+                    face_center_x = (x + w/2) / frame.shape[1]
+                    face_center_y = (y + h/2) / frame.shape[0]
+                    
+                    # Calculate crop coordinates to keep face centered
+                    cropped = self._center_crop(frame, face_center_x, face_center_y, target_width, target_height)
+                    return cropped
+            except Exception as e:
+                logger.warning(f"OpenCV face detection failed: {e}")
         
-        if results.detections:
-            # Get face bounding box
-            detection = results.detections[0]
-            bbox = detection.location_data.relative_bounding_box
-            
-            # Calculate face center
-            face_center_x = bbox.xmin + bbox.width / 2
-            face_center_y = bbox.ymin + bbox.height / 2
-            
-            # Calculate crop coordinates to keep face centered
-            cropped = self._center_crop(frame, face_center_x, face_center_y, target_width, target_height)
-        else:
-            # No face detected, crop from center
-            cropped = self._center_crop(frame, 0.5, 0.5, target_width, target_height)
-            
+        # Fallback: no face detection available, crop from center
+        cropped = self._center_crop(frame, 0.5, 0.5, target_width, target_height)
+        
         return cropped
         
     def _center_crop(self, frame: np.ndarray, center_x: float, center_y: float, target_width: int, target_height: int) -> np.ndarray:
