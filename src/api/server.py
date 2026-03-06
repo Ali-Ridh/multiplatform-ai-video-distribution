@@ -157,11 +157,32 @@ async def upload_video(file: UploadFile = File(...)):
             
         logger.info(f"File saved: {file_path}")
         
+        # Save to database so it appears in the gallery
+        from src.database import get_db
+        from src.models import Video
+        
+        db = next(get_db())
+        new_video = Video(
+            original_url="",
+            original_path=file_path,
+            title=file.filename,
+            status="completed"
+        )
+        db.add(new_video)
+        db.commit()
+        db.refresh(new_video)
+        
         return {
             "success": True,
-            "file_path": file_path,
-            "filename": file.filename,
-            "message": "File uploaded successfully"
+            "video": {
+                "id": str(new_video.id),
+                "filename": new_video.title,
+                "path": new_video.original_path,
+                "views": 0,
+                "likes": 0,
+                "created_at": new_video.created_at.isoformat() if new_video.created_at else None
+            },
+            "message": "File uploaded and saved to database successfully"
         }
         
     except Exception as e:
@@ -177,27 +198,37 @@ async def list_videos():
         List of processed videos
     """
     try:
-        processed_dir = os.path.join(os.getenv("OUTPUT_DIR", "./output"), "processed")
-        os.makedirs(processed_dir, exist_ok=True)
+        from src.database import get_db
+        from src.models import Video, Analytics
+        from sqlalchemy import func
         
-        videos = []
+        db = next(get_db())
         
-        for filename in os.listdir(processed_dir):
-            if filename.endswith(('.mp4', '.avi', '.mov')):
-                file_path = os.path.join(processed_dir, filename)
-                stat = os.stat(file_path)
+        # Query all videos and calculate their total views and likes across platforms
+        videos = db.query(Video).all()
+        response_videos = []
+        
+        for video in videos:
+            views = db.query(func.sum(Analytics.views)).filter(Analytics.video_id == video.id).scalar() or 0
+            likes = db.query(func.sum(Analytics.likes)).filter(Analytics.video_id == video.id).scalar() or 0
+            
+            response_videos.append({
+                "id": str(video.id),
+                "filename": video.title or f"Video {video.id}",
+                "path": video.processed_path or video.original_url,
+                "size": 0,
+                "created_at": video.created_at.isoformat() if video.created_at else None,
+                "modified_at": video.updated_at.isoformat() if video.updated_at else None,
+                "views": views,
+                "likes": likes
+            })
                 
-                videos.append({
-                    "filename": filename,
-                    "path": file_path,
-                    "size": stat.st_size,
-                    "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                    "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat()
-                })
+        # Sort by views descending to show top videos
+        response_videos.sort(key=lambda x: x["views"], reverse=True)
                 
         return {
             "success": True,
-            "videos": videos
+            "videos": response_videos
         }
         
     except Exception as e:
@@ -349,29 +380,234 @@ async def get_accounts():
     """
     try:
         from src.database import get_db
-        from src.models import Account
+        from src.models import Account, Video, Analytics
+        from sqlalchemy import func
         
         db = next(get_db())
         accounts = db.query(Account).all()
         
+        response_accounts = []
+        for account in accounts:
+            # Calculate videos count
+            posts = db.query(Video).filter(Video.account_id == account.id).count()
+            
+            # Calculate total views
+            views = db.query(func.sum(Analytics.views)).filter(Analytics.account_id == account.id).scalar() or 0
+            
+            # Calculate engagement (likes + comments) / views * 100
+            likes = db.query(func.sum(Analytics.likes)).filter(Analytics.account_id == account.id).scalar() or 0
+            comments = db.query(func.sum(Analytics.comments)).filter(Analytics.account_id == account.id).scalar() or 0
+            
+            engagement = 0.0
+            if views > 0:
+                engagement = round(((likes + comments) / views) * 100, 2)
+                
+            response_accounts.append({
+                "id": account.id,
+                "platform": account.platform,
+                "username": account.username,
+                "status": "Active" if account.is_active else "Inactive",
+                "posts": posts,
+                "views": views,
+                "engagement": engagement
+            })
+            
         return {
             "success": True,
-            "accounts": [
-                {
-                    "id": account.id,
-                    "platform": account.platform,
-                    "username": account.username,
-                    "status": "Active" if account.is_active else "Inactive",
-                    "posts": 0,  # TODO: Calculate from videos
-                    "views": 0,  # TODO: Calculate from analytics
-                    "engagement": 0.0  # TODO: Calculate from analytics
-                }
-                for account in accounts
-            ]
+            "accounts": response_accounts
         }
         
     except Exception as e:
         logger.error(f"Get accounts failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+import secrets
+import urllib.parse
+from fastapi.responses import RedirectResponse
+import httpx
+
+# OAuth2 Configuration (should ideally come from env vars)
+OAUTH_CONFIG = {
+    "tiktok": {
+        "client_key": os.getenv("TIKTOK_CLIENT_KEY", "placeholder_tiktok_key"),
+        "client_secret": os.getenv("TIKTOK_CLIENT_SECRET", "placeholder_tiktok_secret"),
+        "auth_url": "https://www.tiktok.com/v2/auth/authorize/",
+        "token_url": "https://open.tiktokapis.com/v2/oauth/token/",
+        "scopes": "user.info.basic,video.upload,video.publish"
+    },
+    "youtube": {
+        "client_id": os.getenv("YOUTUBE_CLIENT_ID", "placeholder_youtube_id"),
+        "client_secret": os.getenv("YOUTUBE_CLIENT_SECRET", "placeholder_youtube_secret"),
+        "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_url": "https://oauth2.googleapis.com/token",
+        "scopes": "https://www.googleapis.com/auth/youtube.upload"
+    },
+    "instagram": {
+        "client_id": os.getenv("INSTAGRAM_CLIENT_ID", "placeholder_instagram_id"),
+        "client_secret": os.getenv("INSTAGRAM_CLIENT_SECRET", "placeholder_instagram_secret"),
+        "auth_url": "https://api.instagram.com/oauth/authorize",
+        "token_url": "https://api.instagram.com/oauth/access_token",
+        "scopes": "instagram_basic,instagram_content_publish"
+    }
+}
+
+REDIRECT_URI = "http://localhost:8000/api/accounts/callback"
+
+@app.get("/api/accounts/auth")
+async def get_oauth_url(platform: str):
+    """
+    Generate the OAuth2 Authorization URL for a specific platform.
+    """
+    platform = platform.lower()
+    if platform not in OAUTH_CONFIG:
+        raise HTTPException(status_code=400, detail="Unsupported platform")
+        
+    config = OAUTH_CONFIG[platform]
+    state = secrets.token_urlsafe(16)
+    
+    # Store state somewhere secure in a real app (e.g. Redis or signed cookie) to prevent CSRF
+    
+    params = {}
+    if platform == "tiktok":
+        params = {
+            "client_key": config["client_key"],
+            "response_type": "code",
+            "scope": config["scopes"],
+            "redirect_uri": REDIRECT_URI,
+            "state": f"{platform}:{state}"
+        }
+    else:
+        # Standard OAuth2 (Google, Instagram)
+        params = {
+            "client_id": config.get("client_id", ""),
+            "response_type": "code",
+            "scope": config["scopes"],
+            "redirect_uri": REDIRECT_URI,
+            "state": f"{platform}:{state}"
+        }
+        
+        if platform == "youtube":
+            params["access_type"] = "offline" # Required for refresh token Google
+            params["prompt"] = "consent"
+            
+    auth_url = f"{config['auth_url']}?{urllib.parse.urlencode(params)}"
+    return {"success": True, "auth_url": auth_url}
+
+@app.get("/api/accounts/callback")
+async def oauth_callback(code: str, state: str, error: str = None):
+    """
+    Handle the OAuth2 callback from platforms, exchange code for tokens, and save the account.
+    """
+    if error:
+        return RedirectResponse(url=f"http://localhost:3000?error={error}")
+        
+    if not code or not state:
+        return RedirectResponse(url="http://localhost:3000?error=missing_parameters")
+        
+    # Extract platform from state mapping
+    try:
+        platform, original_state = state.split(":", 1)
+    except ValueError:
+        return RedirectResponse(url="http://localhost:3000?error=invalid_state")
+        
+    if platform not in OAUTH_CONFIG:
+        return RedirectResponse(url="http://localhost:3000?error=unsupported_platform")
+
+    config = OAUTH_CONFIG[platform]
+    
+    # Normally we would do an async httpx.post to the token_url here to exchange the `code` for actual tokens.
+    # Since we don't have real app credentials in sandbox mode, we simulate the token exchange response:
+    
+    access_token = f"mock_access_token_{secrets.token_hex(8)}"
+    refresh_token = f"mock_refresh_token_{secrets.token_hex(8)}"
+    # Mocking getting user profile info during token exchange
+    username = f"{platform}_user_{secrets.token_hex(4)}"
+
+    try:
+        from src.database import get_db
+        from src.models import Account
+        db = next(get_db())
+        
+        # Upsert account (if an account with same platform/username exists, update tokens)
+        account = db.query(Account).filter(Account.platform == platform, Account.username == username).first()
+        
+        if not account:
+            account = Account(
+                platform=platform,
+                username=username,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                is_active=True
+            )
+            db.add(account)
+        else:
+            account.access_token = access_token
+            account.refresh_token = refresh_token
+            account.is_active = True
+            
+        db.commit()
+        db.refresh(account)
+        
+        # Redirect back to frontend dashboard with success
+        return RedirectResponse(url="http://localhost:3000?account_connected=true")
+        
+    except Exception as e:
+        logger.error(f"Callback account save failed: {str(e)}", exc_info=True)
+        return RedirectResponse(url="http://localhost:3000?error=database_error")
+
+@app.get("/api/analytics/timeseries")
+async def get_analytics_timeseries(days: int = Query(7, ge=1, le=90)):
+    """
+    Get timeseries analytics data for the given number of days
+    """
+    try:
+        from src.database import get_db
+        from src.models import Analytics
+        from datetime import datetime, timedelta
+        from sqlalchemy import func
+        
+        db = next(get_db())
+        
+        # Calculate start date
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days-1)
+        
+        # We need data grouped by day
+        # For simplicity in SQLite/Postgres compatibility, we fetch raw records and aggregate in Python
+        recent_analytics = db.query(Analytics).filter(Analytics.created_at >= start_date).all()
+        
+        # Initialize map with zero values for the past N days
+        daily_stats = {}
+        for i in range(days):
+            day = (start_date + timedelta(days=i)).strftime("%a") # Mon, Tue, etc.
+            # Using date string as key to handle multiple weeks safely, though we'll just format it to day name
+            date_key = (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
+            daily_stats[date_key] = {
+                "name": day,
+                "views": 0,
+                "likes": 0,
+                "comments": 0
+            }
+            
+        # Aggregate analytics by day
+        for row in recent_analytics:
+            if row.created_at:
+                date_key = row.created_at.strftime("%Y-%m-%d")
+                if date_key in daily_stats:
+                    daily_stats[date_key]["views"] += (row.views or 0)
+                    daily_stats[date_key]["likes"] += (row.likes or 0)
+                    daily_stats[date_key]["comments"] += (row.comments or 0)
+                    
+        # Convert dictionary to ordered list
+        result = list(daily_stats.values())
+        
+        return {
+            "success": True,
+            "data": result
+        }
+        
+    except Exception as e:
+        logger.error(f"Get timeseries failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics")

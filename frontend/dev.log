@@ -1,0 +1,23 @@
+
+> opus-dashboard@1.0.0 dev
+> next dev -p 3000
+
+ ⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1939:16)
+    at listenInCluster (node:net:1996:12)
+    at Server.listen (node:net:2101:7)
+    at C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\start-server.js:278:16
+    at new Promise (<anonymous>)
+    at startServer (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\start-server.js:190:11)
+    at C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\start-server.js:308:52
+    at Span.traceAsyncFn (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\trace\trace.js:151:26)
+    at process.<anonymous> (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\start-server.js:308:35)
+    at process.emit (node:events:518:28) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+[?25h

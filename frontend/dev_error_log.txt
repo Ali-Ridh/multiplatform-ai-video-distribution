@@ -1,0 +1,96 @@
+
+> opus-dashboard@1.0.0 dev
+> next dev -p 3000
+
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+
+ ✓ Ready in 5.6s
+ ○ Compiling / ...
+ ✓ Compiled / in 14s (1499 modules)
+ ○ Compiling /not-found ...
+ ✓ Compiled /not-found in 5.5s (1490 modules)
+ ⨯ Error: Cannot find module 'C:\Users\Lenovo\Downloads\Fau\frontend\out\server\middleware-manifest.json'
+Require stack:
+- C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next-server.js
+- C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\dev\next-dev-server.js
+- C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next.js
+- C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\start-server.js
+    at Function.<anonymous> (node:internal/modules/cjs/loader:1401:15)
+    at C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at DevServer.getMiddlewareManifest (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next-server.js:910:26)
+    at DevServer.getEdgeFunctionsPages (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next-server.js:926:31)
+    at DevServer.renderErrorToResponseImpl (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next-server.js:885:22)
+    at async DevServer.pipeImpl (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\base-server.js:911:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next-server.js:230:21)
+    at async DevServer.handleRequestImpl (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\base-server.js:807:17)
+    at async C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\dev\next-dev-server.js:331:20
+    at async Span.traceAsyncFn (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\trace\trace.js:151:20)
+    at async DevServer.handleRequest (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\dev\next-dev-server.js:328:24)
+    at async invokeRender (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\router-server.js:163:21)
+    at async handleRequest (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\router-server.js:342:24)
+    at async requestHandlerImpl (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\router-server.js:366:13)
+    at async Server.requestListener (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\start-server.js:140:13) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\Lenovo\\Downloads\\Fau\\frontend\\node_modules\\next\\dist\\server\\next-server.js',
+    'C:\\Users\\Lenovo\\Downloads\\Fau\\frontend\\node_modules\\next\\dist\\server\\dev\\next-dev-server.js',
+    'C:\\Users\\Lenovo\\Downloads\\Fau\\frontend\\node_modules\\next\\dist\\server\\next.js',
+    'C:\\Users\\Lenovo\\Downloads\\Fau\\frontend\\node_modules\\next\\dist\\server\\lib\\start-server.js'
+  ]
+}
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 2.4s (1653 modules)
+ ⚠ Found a change in next.config.js. Restarting the server to apply the changes...
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+
+ ✓ Ready in 6.5s
+ ○ Compiling / ...
+ ✓ Compiled / in 14.1s (1499 modules)
+ ⨯ Error: Cannot find module 'C:\Users\Lenovo\Downloads\Fau\frontend\.next\server\middleware-manifest.json'
+Require stack:
+- C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next-server.js
+- C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\dev\next-dev-server.js
+- C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next.js
+- C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\start-server.js
+    at Function.<anonymous> (node:internal/modules/cjs/loader:1401:15)
+    at C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at DevServer.getMiddlewareManifest (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next-server.js:910:26)
+    at DevServer.getEdgeFunctionsPages (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next-server.js:926:31)
+    at NextNodeServer.handleCatchallRenderRequest (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\next-server.js:237:49)
+    at async DevServer.handleRequestImpl (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\base-server.js:807:17)
+    at async C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\dev\next-dev-server.js:331:20
+    at async Span.traceAsyncFn (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\trace\trace.js:151:20)
+    at async DevServer.handleRequest (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\dev\next-dev-server.js:328:24)
+    at async invokeRender (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\router-server.js:163:21)
+    at async handleRequest (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\router-server.js:342:24)
+    at async requestHandlerImpl (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\router-server.js:366:13)
+    at async Server.requestListener (C:\Users\Lenovo\Downloads\Fau\frontend\node_modules\next\dist\server\lib\start-server.js:140:13) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\Lenovo\\Downloads\\Fau\\frontend\\node_modules\\next\\dist\\server\\next-server.js',
+    'C:\\Users\\Lenovo\\Downloads\\Fau\\frontend\\node_modules\\next\\dist\\server\\dev\\next-dev-server.js',
+    'C:\\Users\\Lenovo\\Downloads\\Fau\\frontend\\node_modules\\next\\dist\\server\\next.js',
+    'C:\\Users\\Lenovo\\Downloads\\Fau\\frontend\\node_modules\\next\\dist\\server\\lib\\start-server.js'
+  ]
+}
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 6.3s (1648 modules)
+[?25h

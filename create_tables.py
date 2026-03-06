@@ -10,6 +10,9 @@ from src.database import engine, Base
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Import all models so they are registered with Base.metadata
+import src.models
+
 def create_all_tables():
     """Create all database tables based on models"""
     

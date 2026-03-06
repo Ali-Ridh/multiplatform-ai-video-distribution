@@ -1,27 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { 
-  LayoutDashboard, 
-  Video, 
-  Upload, 
-  Settings, 
-  Bell, 
-  Search, 
-  Plus, 
+import { useState, useEffect, useRef } from 'react';
+import {
+  LayoutDashboard,
+  Video,
+  Upload,
+  Settings,
+  Bell,
+  Search,
+  Plus,
   ArrowRight,
   Activity,
   BarChart2,
   Users,
   PlayCircle
 } from 'lucide-react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   BarChart,
   Bar
@@ -44,6 +44,7 @@ interface VideoData {
   views: number;
   likes: number;
   shares: number;
+  created_at?: string;
 }
 
 interface AnalyticsData {
@@ -73,45 +74,57 @@ const DashboardPage = () => {
     video_count: 0
   });
 
+  // State for Add Account Modal
+  const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
+  const [newAccountPlatform, setNewAccountPlatform] = useState('tiktok');
+  const [newAccountUsername, setNewAccountUsername] = useState('');
+  const [isSubmittingAccount, setIsSubmittingAccount] = useState(false);
+
+  const fetchAccounts = async () => {
+    try {
+      const accountsResponse = await fetch('http://localhost:8000/api/accounts');
+      if (accountsResponse.ok) {
+        const accountsData = await accountsResponse.json();
+        setAccounts(accountsData.accounts);
+      }
+    } catch (error) {
+      console.error('Error fetching accounts:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         // Fetch accounts
-        const accountsResponse = await fetch('/api/accounts');
-        if (accountsResponse.ok) {
-          const accountsData = await accountsResponse.json();
-          setAccounts(accountsData.accounts);
-        }
+        await fetchAccounts();
 
         // Fetch analytics summary
-        const analyticsResponse = await fetch('/api/analytics');
+        const analyticsResponse = await fetch('http://localhost:8000/api/analytics');
         if (analyticsResponse.ok) {
           const analyticsData = await analyticsResponse.json();
           setAnalyticsSummary(analyticsData.data);
         }
 
         // Fetch videos
-        const videosResponse = await fetch('/api/videos');
+        const videosResponse = await fetch('http://localhost:8000/api/videos');
         if (videosResponse.ok) {
           const videosData = await videosResponse.json();
           setVideos(videosData.videos.map((video: any) => ({
-            id: video.filename,
-            title: video.filename.split('.')[0],
-            views: 0,
-            likes: 0,
-            shares: 0
+            id: video.id,
+            title: video.filename,
+            views: video.views || 0,
+            likes: video.likes || 0,
+            shares: 0,
+            created_at: video.created_at
           })));
         }
 
-        // Generate mock analytics data for chart (we'll replace this with real data later)
-        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const generatedData = days.map(day => ({
-          name: day,
-          views: Math.floor(Math.random() * 5000),
-          likes: Math.floor(Math.random() * 2000),
-          comments: Math.floor(Math.random() * 200)
-        }));
-        setAnalyticsData(generatedData);
+        // Fetch analytics timeseries data
+        const timeseriesResponse = await fetch('http://localhost:8000/api/analytics/timeseries?days=7');
+        if (timeseriesResponse.ok) {
+          const timeseriesData = await timeseriesResponse.json();
+          setAnalyticsData(timeseriesData.data);
+        }
 
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -122,6 +135,61 @@ const DashboardPage = () => {
 
     fetchData();
   }, []);
+
+  // State for Upload Video
+  const [uploadUrl, setUploadUrl] = useState('');
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+
+  // Hidden File Input Ref for direct uploads
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadSuccess(false);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('http://localhost:8000/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.video) {
+          // Prepend the new video to the gallery immediately
+          setVideos(prev => [{
+            id: data.video.id,
+            title: data.video.filename,
+            views: 0,
+            likes: 0,
+            shares: 0,
+            created_at: data.video.created_at
+          }, ...prev]);
+
+          setUploadSuccess(true);
+          setTimeout(() => setUploadSuccess(false), 5000);
+
+          // Reset file input so same file can be selected again
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      } else {
+        console.error('Failed to upload video');
+      }
+    } catch (error) {
+      console.error('Error uploading video:', error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -134,6 +202,60 @@ const DashboardPage = () => {
       </div>
     );
   }
+
+  const handleAddAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    setIsSubmittingAccount(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/accounts/auth?platform=${newAccountPlatform}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.auth_url) {
+          window.location.href = data.auth_url; // Hard redirect to OAuth provider
+        }
+      } else {
+        console.error('Failed to get auth URL');
+      }
+    } catch (error) {
+      console.error('Error initiating account auth:', error);
+    } finally {
+      setIsSubmittingAccount(false);
+    }
+  };
+
+
+  const handleUploadVideo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadUrl.trim()) return;
+
+    setIsUploading(true);
+    setUploadSuccess(false);
+    try {
+      // The backend /api/process expects the url as a query param
+      const response = await fetch(`http://localhost:8000/api/process?url=${encodeURIComponent(uploadUrl)}`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setUploadSuccess(true);
+          setUploadUrl('');
+          setUploadTitle('');
+          setUploadDescription('');
+          setTimeout(() => setUploadSuccess(false), 5000); // Hide success message after 5 seconds
+        }
+      } else {
+        console.error('Failed to process video');
+      }
+    } catch (error) {
+      console.error('Error processing video:', error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -148,61 +270,56 @@ const DashboardPage = () => {
           </div>
 
           <nav className="space-y-2">
-            <button 
+            <button
               onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                activeTab === 'dashboard' 
-                  ? 'bg-blue-50 text-primary font-medium' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'dashboard'
+                ? 'bg-blue-50 text-primary font-medium'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
             >
               <LayoutDashboard className="w-5 h-5" />
               <span>Dashboard</span>
             </button>
-            
-            <button 
+
+            <button
               onClick={() => setActiveTab('videos')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                activeTab === 'videos' 
-                  ? 'bg-blue-50 text-primary font-medium' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'videos'
+                ? 'bg-blue-50 text-primary font-medium'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
             >
               <Video className="w-5 h-5" />
               <span>Videos</span>
             </button>
-            
-            <button 
+
+            <button
               onClick={() => setActiveTab('upload')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                activeTab === 'upload' 
-                  ? 'bg-blue-50 text-primary font-medium' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'upload'
+                ? 'bg-blue-50 text-primary font-medium'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
             >
               <Upload className="w-5 h-5" />
               <span>Upload</span>
             </button>
-            
-            <button 
+
+            <button
               onClick={() => setActiveTab('analytics')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                activeTab === 'analytics' 
-                  ? 'bg-blue-50 text-primary font-medium' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'analytics'
+                ? 'bg-blue-50 text-primary font-medium'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
             >
               <BarChart2 className="w-5 h-5" />
               <span>Analytics</span>
             </button>
-            
-            <button 
+
+            <button
               onClick={() => setActiveTab('accounts')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                activeTab === 'accounts' 
-                  ? 'bg-blue-50 text-primary font-medium' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'accounts'
+                ? 'bg-blue-50 text-primary font-medium'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
             >
               <Users className="w-5 h-5" />
               <span>Accounts</span>
@@ -226,9 +343,9 @@ const DashboardPage = () => {
             <div className="flex items-center gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search videos..." 
+                <input
+                  type="text"
+                  placeholder="Search videos..."
                   className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary w-64"
                 />
               </div>
@@ -239,7 +356,7 @@ const DashboardPage = () => {
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
               </button>
-              
+
               <div className="flex items-center gap-3">
                 <div className="text-right hidden sm:block">
                   <div className="text-sm font-medium text-gray-900">Admin User</div>
@@ -264,7 +381,6 @@ const DashboardPage = () => {
                     <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-primary">
                       <PlayCircle className="w-6 h-6" />
                     </div>
-                    <span className="text-green-500 text-sm font-medium">+{Math.floor(Math.random() * 20)}%</span>
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-gray-900 mb-1">
@@ -279,7 +395,6 @@ const DashboardPage = () => {
                     <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center text-green-600">
                       <Activity className="w-6 h-6" />
                     </div>
-                    <span className="text-green-500 text-sm font-medium">+{Math.floor(Math.random() * 20)}%</span>
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-gray-900 mb-1">
@@ -294,7 +409,6 @@ const DashboardPage = () => {
                     <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
                       <BarChart2 className="w-6 h-6" />
                     </div>
-                    <span className="text-green-500 text-sm font-medium">+{Math.floor(Math.random() * 10)}%</span>
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-gray-900 mb-1">{analyticsSummary.video_count}</div>
@@ -307,7 +421,6 @@ const DashboardPage = () => {
                     <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center text-yellow-600">
                       <Users className="w-6 h-6" />
                     </div>
-                    <span className="text-green-500 text-sm font-medium">+{Math.floor(Math.random() * 5)}%</span>
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-gray-900 mb-1">
@@ -335,13 +448,13 @@ const DashboardPage = () => {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                         <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
                         <YAxis stroke="#6b7280" fontSize={12} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#fff', 
-                            border: '1px solid #e5e7eb', 
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#fff',
+                            border: '1px solid #e5e7eb',
                             borderRadius: '8px',
                             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
+                          }}
                         />
                         <Line type="monotone" dataKey="views" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
                       </LineChart>
@@ -382,40 +495,26 @@ const DashboardPage = () => {
                     View All <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
-                
+
                 <div className="space-y-6">
-                  <div className="flex items-center gap-4 p-4 rounded-lg hover:bg-gray-50 transition-colors">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-primary">
-                      <Upload className="w-6 h-6" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900">Video processed successfully</div>
-                      <div className="text-sm text-gray-500">Video #123 was processed and rendered</div>
-                    </div>
-                    <div className="text-sm text-gray-500">2 hours ago</div>
-                  </div>
-
-                  <div className="flex items-center gap-4 p-4 rounded-lg hover:bg-gray-50 transition-colors">
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center text-green-600">
-                      <PlayCircle className="w-6 h-6" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900">Video uploaded to TikTok</div>
-                      <div className="text-sm text-gray-500">Video #456 was uploaded to @user1 account</div>
-                    </div>
-                    <div className="text-sm text-gray-500">5 hours ago</div>
-                  </div>
-
-                  <div className="flex items-center gap-4 p-4 rounded-lg hover:bg-gray-50 transition-colors">
-                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
-                      <BarChart2 className="w-6 h-6" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900">Analytics report generated</div>
-                      <div className="text-sm text-gray-500">Daily analytics report ready</div>
-                    </div>
-                    <div className="text-sm text-gray-500">1 day ago</div>
-                  </div>
+                  {videos.length === 0 ? (
+                    <div className="p-4 text-gray-500 text-sm">No recent activity yet.</div>
+                  ) : (
+                    videos.slice(0, 3).map((video) => (
+                      <div key={`activity-${video.id}`} className="flex items-center gap-4 p-4 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-primary">
+                          <PlayCircle className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">Video processed successfully</div>
+                          <div className="text-sm text-gray-500">{video.title}</div>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {video.created_at ? new Date(video.created_at).toLocaleDateString() : 'Recently'}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -426,16 +525,27 @@ const DashboardPage = () => {
             <div className="space-y-8">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900">Videos</h2>
-                <button className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
                   <Plus className="w-4 h-4" />
-                  Add Video
+                  {isUploading ? 'Uploading...' : 'Add Video'}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="video/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
                 </button>
               </div>
 
               {/* Video Gallery */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[1, 2, 3, 4, 5, 6].map((video) => (
-                  <div key={video} className="bg-white rounded-xl overflow-hidden border border-gray-200">
+                {videos.map((video) => (
+                  <div key={video.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 flex flex-col">
                     <div className="relative">
                       <div className="aspect-[9/16] bg-gray-200"></div>
                       <div className="absolute inset-0 flex items-center justify-center">
@@ -444,15 +554,16 @@ const DashboardPage = () => {
                         </div>
                       </div>
                       <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs">
-                        0:35
+                        {video.created_at ? new Date(video.created_at).toLocaleDateString() : 'Recently'}
                       </div>
                     </div>
-                    <div className="p-4">
-                      <div className="font-medium text-gray-900 mb-2">Video Title {video}</div>
-                      <div className="text-sm text-gray-500 mb-4">Uploaded 2 days ago</div>
-                      <div className="flex items-center justify-between text-sm text-gray-600">
-                        <span>1.2K views</span>
-                        <span>85 likes</span>
+                    <div className="p-4 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="font-medium text-gray-900 mb-2 truncate" title={video.title}>{video.title}</div>
+                      </div>
+                      <div className="flex items-center justify-between text-sm text-gray-600 mt-4">
+                        <span>{video.views.toLocaleString()} views</span>
+                        <span>{video.likes.toLocaleString()} likes</span>
                       </div>
                     </div>
                   </div>
@@ -473,62 +584,76 @@ const DashboardPage = () => {
                   </div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">Drop your video here</h3>
                   <p className="text-gray-500 mb-6">or click to browse (MP4, MOV, AVI)</p>
-                  
+
                   <div className="max-w-md mx-auto">
                     <input type="file" accept="video/*" className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-blue-600 transition-colors" />
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <form className="space-y-4" onSubmit={handleUploadVideo}>
+                  {uploadSuccess && (
+                    <div className="bg-green-50 text-green-800 p-4 rounded-lg flex items-center gap-2">
+                      <PlayCircle className="w-5 h-5" />
+                      Video processing task started successfully! Check Recent Activity or the Videos tab soon.
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Video URL</label>
-                    <input 
-                      type="text" 
-                      placeholder="https://..." 
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    <input
+                      type="text"
+                      required
+                      value={uploadUrl}
+                      onChange={(e) => setUploadUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-900"
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Title</label>
-                    <input 
-                      type="text" 
-                      placeholder="Video title" 
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    <input
+                      type="text"
+                      value={uploadTitle}
+                      onChange={(e) => setUploadTitle(e.target.value)}
+                      placeholder="Video title"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-900"
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Description</label>
-                    <textarea 
-                      placeholder="Add a description..." 
+                    <textarea
+                      value={uploadDescription}
+                      onChange={(e) => setUploadDescription(e.target.value)}
+                      placeholder="Add a description..."
                       rows={4}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-900"
                     ></textarea>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Platforms</label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <label className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                        <input type="checkbox" className="rounded text-primary focus:ring-primary" defaultChecked />
-                        <span>TikTok</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                        <input type="checkbox" className="rounded text-primary focus:ring-primary" defaultChecked />
-                        <span>YouTube Shorts</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                        <input type="checkbox" className="rounded text-primary focus:ring-primary" defaultChecked />
-                        <span>Instagram Reels</span>
-                      </label>
+                      {accounts.filter(a => a.status === 'Active').map((account) => (
+                        <label key={`platform-${account.id}`} className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                          <input type="checkbox" className="rounded text-primary focus:ring-primary" defaultChecked={true} />
+                          <span className="capitalize">{account.platform}: @{account.username}</span>
+                        </label>
+                      ))}
+                      {accounts.filter(a => a.status === 'Active').length === 0 && (
+                        <div className="text-sm text-gray-500 col-span-3 pb-2">No active accounts. Return to Accounts tab to connect one first.</div>
+                      )}
                     </div>
                   </div>
 
-                  <button className="w-full bg-primary text-white py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium">
-                    Upload and Process
+                  <button
+                    type="submit"
+                    disabled={isUploading || !uploadUrl.trim()}
+                    className="w-full bg-primary text-white py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50"
+                  >
+                    {isUploading ? 'Processing...' : 'Upload and Process'}
                   </button>
-                </div>
+                </form>
               </div>
             </div>
           )}
@@ -547,13 +672,13 @@ const DashboardPage = () => {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                         <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
                         <YAxis stroke="#6b7280" fontSize={12} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#fff', 
-                            border: '1px solid #e5e7eb', 
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#fff',
+                            border: '1px solid #e5e7eb',
                             borderRadius: '8px',
                             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
+                          }}
                         />
                         <Bar dataKey="views" fill="#3b82f6" name="Views" />
                         <Bar dataKey="likes" fill="#10b981" name="Likes" />
@@ -570,13 +695,13 @@ const DashboardPage = () => {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                         <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
                         <YAxis stroke="#6b7280" fontSize={12} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#fff', 
-                            border: '1px solid #e5e7eb', 
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#fff',
+                            border: '1px solid #e5e7eb',
                             borderRadius: '8px',
                             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }} 
+                          }}
                         />
                         <Line type="monotone" dataKey="comments" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
                       </LineChart>
@@ -592,7 +717,10 @@ const DashboardPage = () => {
             <div className="space-y-8">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900">Connected Accounts</h2>
-                <button className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2">
+                <button
+                  onClick={() => setIsAddAccountOpen(true)}
+                  className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+                >
                   <Plus className="w-4 h-4" />
                   Add Account
                 </button>
@@ -627,11 +755,10 @@ const DashboardPage = () => {
                             <div className="text-sm text-gray-900">{account.username}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              account.status === 'Active' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                            }`}>
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${account.status === 'Active'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                              }`}>
                               {account.status}
                             </span>
                           </td>
@@ -648,6 +775,47 @@ const DashboardPage = () => {
                   </table>
                 </div>
               </div>
+
+              {/* Add Account Modal */}
+              {isAddAccountOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">Add New Account</h3>
+                    <form onSubmit={handleAddAccount}>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+                        <select
+                          value={newAccountPlatform}
+                          onChange={(e) => setNewAccountPlatform(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="tiktok">TikTok</option>
+                          <option value="youtube">YouTube</option>
+                          <option value="instagram">Instagram</option>
+                        </select>
+                      </div>
+
+                      <div className="flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setIsAddAccountOpen(false)}
+                          className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300"
+                          disabled={isSubmittingAccount}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSubmittingAccount}
+                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+                        >
+                          {isSubmittingAccount ? 'Adding...' : 'Add Account'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>
