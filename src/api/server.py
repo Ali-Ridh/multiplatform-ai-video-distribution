@@ -469,12 +469,20 @@ async def get_oauth_url(platform: str):
     
     params = {}
     if platform == "tiktok":
+        code_verifier = secrets.token_urlsafe(32)
+        import hashlib
+        import base64
+        digest = hashlib.sha256(code_verifier.encode('ascii')).digest()
+        code_challenge = base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')
+        
         params = {
             "client_key": config["client_key"],
             "response_type": "code",
             "scope": config["scopes"],
             "redirect_uri": REDIRECT_URI,
-            "state": f"{platform}:{state}"
+            "state": f"{platform}:{state}:{code_verifier}",
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256"
         }
     else:
         # Standard OAuth2 (Google, Instagram)
